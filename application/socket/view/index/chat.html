@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <link rel="stylesheet" type="text/css" href="__STATIC__/main.css"/>
+    <title>与{$to}私聊</title>
+</head>
+<body>
+<div class="header"><h1><span class="to">{$to}</span></h1></div>
+<input type="hidden" id="tousername" value="{$to}">
+<h3>当前用户【<span class="user-name" id="username"></span>】<a href="/socketio" class="fright"
+                                                          target="_blank"><span>返回广场</span></a></h3>
+
+消息：<input type="text" name="" id="msg" title="消息框">
+<button id='send'>发送</button>
+
+<h3>消息列表：</h3>
+<div id="chats" style="width: 80%;">
+    <ul id="chats-list">
+
+    </ul>
+</div>
+
+</body>
+<script src='/../static/admin/js/socket-2.0.3.io.js'></script>
+<script src="/../static/admin/js/jquery-3.3.1.min.js"></script>
+<script>
+    // 如果服务端不在本机，请把127.0.0.1改成服务端ip
+    var socket = io('http://127.0.0.1:2021');
+    var username;
+    function getUsername() {
+        if (username) {
+            return username;
+        } else {
+            username = localStorage.getItem('client_username');
+            return username ? username : '';
+        }
+    }
+
+
+    // 当连接服务端成功时触发connect默认事件
+    socket.on('connect', function () {
+//        console.log('connect success');
+//        console.log('socket.id:' + socket.id);
+        username = getUsername();
+        console.log('从本地读取username ==> ' + username);
+        socket.emit('success', {username: username})
+    });
+
+    socket.on('success', function (data) {
+        data = JSON.parse(data);
+        username = data.username;
+        localStorage.setItem('client_username', username);
+        console.log(username + '连接成功！');
+        $('#username').text(username);
+    });
+
+    socket.on('private chat', function (msg) {
+        var data = JSON.parse(msg);
+        var to = $('#tousername').val();
+        if (data.from === to) {
+            $('#chats-list').prepend('<li>' + data.msg + '</li><div class="clear"></div>');
+        }
+    });
+
+    $('#send').on('click', function () {
+        var text = $('#msg').val();
+        var to = $('#tousername').val();
+        $('#chats-list').prepend('<li>' + '<span class="me-say">' + text + '</span></li><div class="clear"></div>');
+        socket.emit('private chat', {"from": username, "msg": text, "to": to});
+        $('#msg').val('')
+    })
+
+    $('#msg').bind('keyup', function (event) {
+        if (event.keyCode == "13") {
+            //回车执行查询
+            $('#send').click();
+        }
+    });
+
+</script>
+</html>

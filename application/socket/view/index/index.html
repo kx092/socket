@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <link rel="stylesheet" type="text/css" href="/../static/main.css"/>
+    <title>WebSocket聊天</title>
+</head>
+<body>
+<div class="header"><h1><span class="to">广场</span></h1></div>
+<input type="hidden" id="url" value="{:url('socketio/index/chat')}">
+<h3>当前用户【<span class="user-name" id="username"></span>】</h3>
+<button onclick="fadeInput()">修改昵称</button>
+<div id="change-user" style="display: none">
+    <p></p>
+    昵称：<input type="text" id="newName" placeholder="请输入用户名">
+    <button onclick="changeName()">确认</button>
+</div>
+<p></p>
+消息：<input type="text" name="" id="msg" title="消息框">
+<button id='send'>发送</button>
+
+<div id="chats">
+    <div style="width: 65%; float: left">
+        <h3>消息列表</h3>
+        <ul id="chats-list">
+
+        </ul>
+    </div>
+    <div style="width: 30%;float: right">
+        <h3>动态</h3>
+        <ul id="join-left">
+
+        </ul>
+        <h3>系统消息</h3>
+        <ul id="system">
+
+        </ul>
+        <h3>在线（<span id="num"></span>）</h3>
+        <div id="stat" class="user-name">
+
+        </div>
+    </div>
+</div>
+</body>
+<script src='/../static/js/admin/socket-2.0.3.io.js'></script>
+<script src="/../static/js/admin/jquery-3.3.1.min.js"></script>
+<script>
+    // 如果服务端不在本机，请把127.0.0.1改成服务端ip
+    var socket = io('http://127.0.0.1:2021');
+    var username;
+    var url;
+    var allUsers = new Array();
+
+    $(document).ready(function () {
+        username = getUsername();
+        if (!username) {
+            alert('请设置昵称');
+            fadeInput();
+        }
+    });
+
+    function getUsername() {
+        if (username) {
+            return username;
+        } else {
+            username = localStorage.getItem('client_username');
+            return username ? username : '';
+        }
+    }
+
+    // 当连接服务端成功时触发connect默认事件
+    socket.on('connect', function () {
+//        console.log('connect success');
+//        console.log('socket.id:' + socket.id);
+        username = getUsername();
+        console.log('从本地读取username ==> ' + username);
+        if (username) {
+            socket.emit('success', {username: username})
+        }
+    });
+
+    socket.on('success', function (data) {
+        data = JSON.parse(data);
+//        console.log(data);
+        username = data.username;
+//        localStorage.setItem('client_username', username);
+        console.log(username + '连接成功！');
+        $('#username').text(username);
+    });
+
+    //    公开聊天
+    socket.on('sendMsg', function (msg) {
+        var data = JSON.parse(msg);
+        url = $('#url').val();
+        var html;
+//        console.log(data);
+        if (data.type === 'say') {
+            if (data.from == username) {
+                html = '<li>YOU <span class="open-chat">【SAY】</span> : ' + data.msg + '</li>';
+            } else {
+                html = '<li><a href="'
+                    + url + '?username=' + data.from + '" target="_blank">'
+                    + data.from + '</a>'
+                    + ' <span class="open-chat">【SAY】</span> : ' + data.msg + '</li>';
+            }
+        } else if (data.type === 'join') {
+            html = '<li>' + data.msg + '</li>'
+        } else if (data.type === 'left') {
+            html = '<li><span class="private-chat">' + data.username + '</span> has left the chat!</li>'
+        } else if (data.type === 'system') {
+            html = '<li><span class="system-chat">' + data.msg + '</span></li>'
+        }
+
+        if (data.type === 'say') {
+            $('#chats-list').prepend(html);
+        } else if (data.type === 'join' || data.type === 'left') {
+            $('#join-left').prepend(html);
+        } else if (data.type === 'system') {
+            $('#system').prepend(html);
+        }
+
+//        统计数据
+        if (typeof(data.usersNum) != 'undefined') {
+            allUsers = [];
+            var users = data.currentUsers;
+            var num = data.usersNum;
+            var userslist = '';
+            for (var key in users) {
+                userslist += key + '；';
+                allUsers.push(key);
+            }
+//            console.log(allUsers);
+            $('#num').text(num);
+            $('#stat').text(userslist);
+
+        }
+    });
+
+    //    监控私聊
+    socket.on('private chat', function (msg) {
+        var data = JSON.parse(msg);
+        var html = '<li><a href="'
+            + url + '?username=' + data.from + '" target="_blank">'
+            + data.from + '</a>'
+            + ' <span class="private-chat">【Secret to you】</span> : ' + data.msg + '</li>';
+        $('#chats-list').prepend(html);
+    });
+
+    $('#send').on('click', function () {
+        var text = $('#msg').val();
+        socket.emit('sendMsg', {"username": username, "msg": text});
+        $('#msg').val('');
+        // alert(text);
+    });
+
+    function fadeInput() {
+        $('#change-user').fadeToggle();
+    }
+
+    function changeName() {
+        var text = $('#newName').val();
+        if (text.length < 2) {
+            alert('昵称大于4位')
+            return false;
+        }
+        if (text === username) {
+            alert('昵称未修改');
+            return false;
+        }
+        var index = $.inArray(text, allUsers);
+        if (index >= 0) {
+            alert('昵称被占用');
+            return false;
+        }
+        var oldName = username;
+        username = text;
+        localStorage.setItem('client_username', username);
+        if (oldName) {
+//            console.log(oldName);
+            socket.emit('changeName', {username: oldName});
+        }
+        fadeInput();
+        socket.emit('success', {username: username});
+    }
+
+    $('#msg').bind('keyup', function (event) {
+        if (event.keyCode == "13") {
+            //回车执行查询
+            $('#send').click();
+        }
+    });
+
+</script>
+</html>
