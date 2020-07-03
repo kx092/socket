@@ -15,6 +15,8 @@ class Index extends controller{
     		'name'=>"三s",
     		'age' =>"23",
     	]);
+
+    	
     	$redis->set("key",$data);
     	$res = $redis->get("key");
     	$datas = [
